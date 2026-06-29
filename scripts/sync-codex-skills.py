@@ -11,6 +11,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parents[1]
 CLAUDE_SKILLS = ROOT / "skills"
 CODEX_SKILLS = ROOT / "codex-skills"
+REPO_CODEX_SKILLS = ROOT / ".codex" / "skills"
+TARGET_SKILL_ROOTS = (CODEX_SKILLS, REPO_CODEX_SKILLS)
 
 
 def split_frontmatter(text: str) -> tuple[str | None, str]:
@@ -91,24 +93,26 @@ def main() -> None:
         raise SystemExit(f"Unknown argument(s): {joined}")
 
     if not check:
-        CODEX_SKILLS.mkdir(exist_ok=True)
+        for target_root in TARGET_SKILL_ROOTS:
+            target_root.mkdir(parents=True, exist_ok=True)
 
     count = 0
     stale: list[str] = []
     for source in sorted(CLAUDE_SKILLS.glob("*.md")):
         name = source.stem
         source_text = source.read_text(encoding="utf-8")
-        target_dir = CODEX_SKILLS / name
-        target = target_dir / "SKILL.md"
         content = metadata_for(name, source.name, source_text) + codex_body(
             name, source.name, source_text
         )
-        if check:
-            if not target.exists() or target.read_text(encoding="utf-8") != content:
-                stale.append(str(target.relative_to(ROOT)))
-        else:
-            target_dir.mkdir(parents=True, exist_ok=True)
-            target.write_text(content, encoding="utf-8")
+        for target_root in TARGET_SKILL_ROOTS:
+            target_dir = target_root / name
+            target = target_dir / "SKILL.md"
+            if check:
+                if not target.exists() or target.read_text(encoding="utf-8") != content:
+                    stale.append(str(target.relative_to(ROOT)))
+            else:
+                target_dir.mkdir(parents=True, exist_ok=True)
+                target.write_text(content, encoding="utf-8")
         count += 1
 
     if check:
@@ -117,10 +121,12 @@ def main() -> None:
             for path in stale:
                 print(f"  {path}")
             raise SystemExit(1)
-        print(f"Checked {count} Codex skills in {CODEX_SKILLS.relative_to(ROOT)}")
+        roots = ", ".join(str(path.relative_to(ROOT)) for path in TARGET_SKILL_ROOTS)
+        print(f"Checked {count} Codex skills in {roots}")
         return
 
-    print(f"Generated {count} Codex skills in {CODEX_SKILLS.relative_to(ROOT)}")
+    roots = ", ".join(str(path.relative_to(ROOT)) for path in TARGET_SKILL_ROOTS)
+    print(f"Generated {count} Codex skills in {roots}")
 
 
 if __name__ == "__main__":
